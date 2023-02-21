@@ -57,7 +57,9 @@ def loadconfig(config_location = None):
 				# Last ditch effort
 				config_location = 'C:\\Program Files\\VDIClient\\vdiclient.ini'
 			if not os.path.exists(config_location):
-				win_popup_button(f'Unable to read supplied configuration from any location!', 'OK')
+				win_popup_button(
+					'Unable to read supplied configuration from any location!', 'OK'
+				)
 				return False
 		elif os.name == 'posix': #Linux
 			config_location = os.path.expanduser('~/.config/VDIClient/vdiclient.ini')
@@ -66,7 +68,9 @@ def loadconfig(config_location = None):
 			if not os.path.exists(config_location):
 				config_location = '/usr/local/etc/vdiclient/vdiclient.ini'
 			if not os.path.exists(config_location):
-				win_popup_button(f'Unable to read supplied configuration from any location!', 'OK')
+				win_popup_button(
+					'Unable to read supplied configuration from any location!', 'OK'
+				)
 				return False
 		config = ConfigParser(delimiters='=')
 		try:
@@ -74,7 +78,7 @@ def loadconfig(config_location = None):
 		except Exception as e:
 			win_popup_button(f'Unable to read configuration file:\n{e!r}', 'OK')
 			config_location = None
-	if not 'General' in config:
+	if 'General' not in config:
 		win_popup_button(f'Unable to read supplied configuration:\nNo `General` section defined!', 'OK')
 		return False
 	else:
@@ -82,12 +86,10 @@ def loadconfig(config_location = None):
 			G.title = config['General']['title']
 		if 'theme' in config['General']:
 			G.theme = config['General']['theme']
-		if 'icon' in config['General']:
-			if os.path.exists(config['General']['icon']):
-				G.icon = config['General']['icon']
-		if 'logo' in config['General']:
-			if os.path.exists(config['General']['logo']):
-				G.imagefile = config['General']['logo']
+		if 'icon' in config['General'] and os.path.exists(config['General']['icon']):
+			G.icon = config['General']['icon']
+		if 'logo' in config['General'] and os.path.exists(config['General']['logo']):
+			G.imagefile = config['General']['logo']
 		if 'kiosk' in config['General']:
 			G.kiosk = config['General'].getboolean('kiosk')
 		if 'fullscreen' in config['General']:
@@ -96,7 +98,7 @@ def loadconfig(config_location = None):
 			G.inidebug = config['General'].getboolean('inidebug')
 		if 'guest_type' in config['General']:
 			G.guest_type = config['General']['guest_type']
-	if not 'Authentication' in config:
+	if 'Authentication' not in config:
 		win_popup_button(f'Unable to read supplied configuration:\nNo `Authentication` section defined!', 'OK')
 		return False
 	else:
@@ -112,7 +114,7 @@ def loadconfig(config_location = None):
 				G.token_name = config['Authentication']['token_name']
 		if 'token_value' in config['Authentication']:
 				G.token_value = config['Authentication']['token_value']
-	if not 'Hosts' in config:
+	if 'Hosts' not in config:
 		win_popup_button(f'Unable to read supplied configuration:\nNo `Hosts` section defined!', 'OK')
 		return False
 	else:
@@ -158,9 +160,30 @@ def setmainlayout():
 		layout.append([sg.Image(G.imagefile), sg.Text(G.title, size =(18*G.scaling, 1*G.scaling), justification='c', font=["Helvetica", 18])])
 	else:
 		layout.append([sg.Text(G.title, size =(30*G.scaling, 1*G.scaling), justification='c', font=["Helvetica", 18])])
-	layout.append([sg.Text("Username", size =(12*G.scaling, 1*G.scaling), font=["Helvetica", 12]), sg.InputText(default_text=G.user,key='-username-', font=["Helvetica", 12])])
-	layout.append([sg.Text("Password", size =(12*G.scaling, 1*G.scaling),font=["Helvetica", 12]), sg.InputText(key='-password-', password_char='*', font=["Helvetica", 12])])
-	
+	layout.extend(
+		(
+			[
+				sg.Text(
+					"Username",
+					size=(12 * G.scaling, 1 * G.scaling),
+					font=["Helvetica", 12],
+				),
+				sg.InputText(
+					default_text=G.user, key='-username-', font=["Helvetica", 12]
+				),
+			],
+			[
+				sg.Text(
+					"Password",
+					size=(12 * G.scaling, 1 * G.scaling),
+					font=["Helvetica", 12],
+				),
+				sg.InputText(
+					key='-password-', password_char='*', font=["Helvetica", 12]
+				),
+			],
+		)
+	)
 	if G.totp:
 		layout.append([sg.Text("OTP Key", size =(12*G.scaling, 1), font=["Helvetica", 12]), sg.InputText(key='-totp-', font=["Helvetica", 12])])
 	if G.kiosk:
@@ -172,17 +195,17 @@ def setmainlayout():
 def getvms(listonly = False):
 	vms = []
 	try:
-		nodes = []
-		for node in G.proxmox.cluster.resources.get(type='node'):
-			if node['status'] == 'online':
-				nodes.append(node['node'])
-
+		nodes = [
+			node['node']
+			for node in G.proxmox.cluster.resources.get(type='node')
+			if node['status'] == 'online'
+		]
 		for vm in G.proxmox.cluster.resources.get(type='vm'):
 			if vm['node'] not in nodes:
 				continue
 			if 'template' in vm and vm['template']:
 				continue
-			if G.guest_type == 'both' or G.guest_type == vm['type']:
+			if G.guest_type in ['both', vm['type']]:
 				if listonly:
 					vms.append(
 						{
@@ -207,15 +230,25 @@ def setvmlayout(vms):
 	layout.append([sg.Text('Please select a desktop instance to connect to', size =(40*G.scaling, 1*G.scaling), justification='c', font=["Helvetica", 10])])
 	layoutcolumn = []
 	for vm in vms:
-		if not vm["status"] == "unknown":
+		if vm["status"] != "unknown":
 			connkeyname = f'-CONN|{vm["vmid"]}-'
-			layoutcolumn.append([sg.Text(vm['name'], font=["Helvetica", 14], size=(22*G.scaling, 1*G.scaling)), sg.Button('Connect', font=["Helvetica", 14], key=connkeyname)])
-			layoutcolumn.append([sg.HorizontalSeparator()])
+			layoutcolumn.extend(
+				(
+					[
+						sg.Text(
+							vm['name'],
+							font=["Helvetica", 14],
+							size=(22 * G.scaling, 1 * G.scaling),
+						),
+						sg.Button('Connect', font=["Helvetica", 14], key=connkeyname),
+					],
+					[sg.HorizontalSeparator()],
+				)
+			)
 	if len(vms) > 5: # We need a scrollbar
 		layout.append([sg.Column(layoutcolumn, scrollable = True, size = [450*G.scaling, None] )])
 	else:
-		for row in layoutcolumn:
-			layout.append(row)
+		layout.extend(iter(layoutcolumn))
 	layout.append([sg.Button('Logout', font=["Helvetica", 14])])
 	return layout
 
@@ -226,7 +259,7 @@ def iniwin(inistring):
 	iniwindow = sg.Window('INI debug', inilayout)
 	while True:
 		event, values = iniwindow.read()
-		if event == None:
+		if event is None:
 			break
 	iniwindow.close()
 	return True
@@ -250,7 +283,7 @@ def vmaction(vmnode, vmid, vmtype):
 			return False
 		running = False
 		i = 0
-		while running == False and i < 30:
+		while not running and i < 30:
 			try:
 				jobstatus = G.proxmox.nodes(vmnode).tasks(jobid).status.get()
 			except Exception:
@@ -261,10 +294,9 @@ def vmaction(vmnode, vmid, vmtype):
 				startpop = None
 				if jobstatus['exitstatus'] != 'OK':
 					win_popup_button('Unable to start VM, please contact your system administrator for assistance', 'OK')
-					running = True
 				else:
-					running = True
 					status = True
+				running = True
 			sleep(1)
 			i += 1
 		if not status:
@@ -298,9 +330,7 @@ def vmaction(vmnode, vmid, vmtype):
 	connpop = win_popup(f'Connecting to {vmstatus["name"]}...')
 	pcmd = [G.vvcmd]
 	if G.kiosk:
-		pcmd.append('--kiosk')
-		pcmd.append('--kiosk-quit')
-		pcmd.append('on-disconnect')
+		pcmd.extend(('--kiosk', '--kiosk-quit', 'on-disconnect'))
 	elif G.fullscreen:
 		pcmd.append('--full-screen')
 	pcmd.append('-') #We need it to listen on stdin
@@ -309,17 +339,15 @@ def vmaction(vmnode, vmid, vmtype):
 		output = process.communicate(input=inistring.encode('utf-8'), timeout=5)[0]
 	except subprocess.TimeoutExpired:
 		pass
-	status = True
 	connpop.close()
-	return status
+	return True
 
 
 def setcmd():
 	try:
-		if os.name == 'nt': # Windows
+		if os.name == 'nt':
 			import csv
-			cmd1 = 'ftype VirtViewer.vvfile'
-			result = subprocess.check_output(cmd1, shell=True)
+			result = subprocess.check_output('ftype VirtViewer.vvfile', shell=True)
 			cmdresult = result.decode('utf-8')
 			cmdparts = cmdresult.split('=')
 			for row in csv.reader([cmdparts[1]], delimiter = ' ', quotechar = '"'):
@@ -327,8 +355,7 @@ def setcmd():
 				break
 
 		elif os.name == 'posix':
-			cmd1 = 'which remote-viewer'
-			result = subprocess.check_output(cmd1, shell=True)
+			result = subprocess.check_output('which remote-viewer', shell=True)
 			G.vvcmd = 'remote-viewer'
 	except subprocess.CalledProcessError:
 		if os.name == 'nt':
@@ -342,10 +369,7 @@ def pveauth(username, passwd=None, totp=None):
 	err = None
 	for hostinfo in G.hostpool:
 		host = hostinfo['host']
-		if 'port' in hostinfo:
-			port = hostinfo['port']
-		else:
-			port = 8006
+		port = hostinfo['port'] if 'port' in hostinfo else 8006
 		connected = False
 		authenticated = False
 		if not connected and not authenticated:
@@ -377,10 +401,10 @@ def loginwindow():
 		if not connected:
 			win_popup_button(f'Unable to connect to any VDI server, are you connected to the Internet?\nError Info: {error}', 'OK')
 			return False
-		elif connected and not authenticated:
+		elif not authenticated:
 			win_popup_button('Invalid username and/or password, please try again!', 'OK')
 			return False
-		elif connected and authenticated:
+		else:
 			return True
 	else:
 		if G.icon:
@@ -389,7 +413,7 @@ def loginwindow():
 			window = sg.Window(G.title, layout, return_keyboard_events=True, resizable=False, no_titlebar=G.kiosk)
 		while True:
 			event, values = window.read()
-			if event == 'Cancel' or event == sg.WIN_CLOSED:
+			if event in ['Cancel', sg.WIN_CLOSED]:
 				window.close()
 				return False
 			else:
@@ -398,16 +422,15 @@ def loginwindow():
 					user = values['-username-']
 					passwd = values['-password-']
 					totp = None
-					if '-totp-' in values:
-						if values['-totp-'] not in (None, ''):
-							totp = values['-totp-']
+					if '-totp-' in values and values['-totp-'] not in (None, ''):
+						totp = values['-totp-']
 					connected, authenticated, error = pveauth(user, passwd=passwd, totp=totp)
 					popwin.close()
 					if not connected:
 						win_popup_button(f'Unable to connect to any VDI server, are you connected to the Internet?\nError Info: {error}', 'OK')
-					elif connected and not authenticated:
+					elif not authenticated:
 						win_popup_button('Invalid username and/or password, please try again!', 'OK')
-					elif connected and authenticated:
+					else:
 						window.close()
 						return True
 					#break
@@ -478,19 +501,17 @@ def main():
 	while True:
 		if not loggedin:
 			loggedin = loginwindow()
-			if not loggedin:
-				if G.user and G.token_name and G.token_value: # This means if we don't exit we'll be in an infinite loop
-					return 1
-				break
-			else:
-				vmstat = showvms()
-				if not vmstat:
-					G.proxmox = None
-					loggedin = False
-					if G.user and G.token_name and G.token_value: # This means if we don't exit we'll be in an infinite loop
-						return 0
-				else:
+			if loggedin:
+				if vmstat := showvms():
 					return
+				G.proxmox = None
+				loggedin = False
+				if G.user and G.token_name and G.token_value: # This means if we don't exit we'll be in an infinite loop
+					return 0
+			elif G.user and G.token_name and G.token_value: # This means if we don't exit we'll be in an infinite loop
+				return 1
+			else:
+				break
 
 if __name__ == '__main__':
 	sys.exit(main())
