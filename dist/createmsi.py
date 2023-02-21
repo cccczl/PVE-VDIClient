@@ -49,8 +49,8 @@ class PackageGenerator:
 		self.addremove_icon = jsondata.get('addremove_icon', None)
 		self.startmenu_shortcut = jsondata.get('startmenu_shortcut', None)
 		self.desktop_shortcut = jsondata.get('desktop_shortcut', None)
-		self.main_xml = self.basename + '.wxs'
-		self.main_o = self.basename + '.wixobj'
+		self.main_xml = f'{self.basename}.wxs'
+		self.main_o = f'{self.basename}.wixobj'
 		if 'installscope' in jsondata:
 			self.installscope = jsondata['installscope']
 		else:
@@ -58,12 +58,10 @@ class PackageGenerator:
 		assert self.installscope in ('perUser', 'perMachine')
 		if 'arch' in jsondata:
 			self.arch = jsondata['arch']
+		elif 'PROGRAMFILES(X86)' in os.environ:
+			self.arch = 64
 		else:
-			# rely on the environment variable since python architecture may not be the same as system architecture
-			if 'PROGRAMFILES(X86)' in os.environ:
-				self.arch = 64
-			else:
-				self.arch = 32 if '32' in platform.architecture()[0] else 64
+			self.arch = 32 if '32' in platform.architecture()[0] else 64
 		self.final_output = '%s-%s-%d.msi' % (self.basename, self.version, self.arch)
 		if self.arch == 64:
 			self.progfile_dir = 'ProgramFiles64Folder'
@@ -100,34 +98,48 @@ class PackageGenerator:
 			'Codepage':  '1252',
 			'Version': self.version,
 		})
-			
-		package = ET.SubElement(product, 'Package',  {
-			'Id': '*',
-			'Keywords': 'Installer',
-			'Description': '%s %s installer' % (self.name, self.version),
-			'Comments': self.comments,
-			'Manufacturer': self.manufacturer,
-			'InstallerVersion': '500',
-			'Languages': '1033',
-			'Compressed': 'yes',
-			'SummaryCodepage': '1252',
-			'InstallScope': self.installscope,
-		})
+
+		package = ET.SubElement(
+			product,
+			'Package',
+			{
+				'Id': '*',
+				'Keywords': 'Installer',
+				'Description': f'{self.name} {self.version} installer',
+				'Comments': self.comments,
+				'Manufacturer': self.manufacturer,
+				'InstallerVersion': '500',
+				'Languages': '1033',
+				'Compressed': 'yes',
+				'SummaryCodepage': '1252',
+				'InstallScope': self.installscope,
+			},
+		)
 
 		if self.major_upgrade is not None:
 			majorupgrade = ET.SubElement(product, 'MajorUpgrade', {})
 			for mkey in self.major_upgrade.keys():
 				majorupgrade.set(mkey, self.major_upgrade[mkey])
 		else:
-			ET.SubElement(product, 'MajorUpgrade', {'DowngradeErrorMessage': 'A newer version of %s is already installed.' % self.name})
+			ET.SubElement(
+				product,
+				'MajorUpgrade',
+				{
+					'DowngradeErrorMessage': f'A newer version of {self.name} is already installed.'
+				},
+			)
 		if self.arch == 64:
 			package.set('Platform', 'x64')
-		ET.SubElement(product, 'Media', {
-			'Id': '1',
-			'Cabinet': self.basename + '.cab',
-			'CompressionLevel': 'high',
-			'EmbedCab': 'yes',
-		})
+		ET.SubElement(
+			product,
+			'Media',
+			{
+				'Id': '1',
+				'Cabinet': f'{self.basename}.cab',
+				'CompressionLevel': 'high',
+				'EmbedCab': 'yes',
+			},
+		)
 		targetdir = ET.SubElement(product, 'Directory', {
 			'Id': 'TARGETDIR',
 			'Name': 'SourceDir',
@@ -162,12 +174,17 @@ class PackageGenerator:
 			comp = ET.SubElement(ap, 'Component', {'Id': 'ApplicationShortcut',
 												   'Guid': gen_guid(),
 												   })
-			ET.SubElement(comp, 'Shortcut', {'Id': 'ApplicationStartMenuShortcut',
-											 'Name': self.product_name,
-											 'Description': self.comments,
-											 'Target': '[INSTALLDIR]' + self.startmenu_shortcut,
-											 'WorkingDirectory': 'INSTALLDIR',
-			})
+			ET.SubElement(
+				comp,
+				'Shortcut',
+				{
+					'Id': 'ApplicationStartMenuShortcut',
+					'Name': self.product_name,
+					'Description': self.comments,
+					'Target': f'[INSTALLDIR]{self.startmenu_shortcut}',
+					'WorkingDirectory': 'INSTALLDIR',
+				},
+			)
 			ET.SubElement(comp, 'RemoveFolder', {'Id': 'RemoveApplicationProgramsFolder',
 												 'Directory': 'ApplicationProgramsFolder',
 												 'On': 'uninstall',
@@ -184,12 +201,17 @@ class PackageGenerator:
 			comp = ET.SubElement(desk, 'Component', {'Id':'ApplicationShortcutDesktop',
 													 'Guid': gen_guid(),
 													 })
-			ET.SubElement(comp, 'Shortcut', {'Id': 'ApplicationDesktopShortcut',
-											 'Name': self.product_name,
-											 'Description': self.comments,
-											 'Target': '[INSTALLDIR]' + self.desktop_shortcut,
-											 'WorkingDirectory': 'INSTALLDIR',
-			})
+			ET.SubElement(
+				comp,
+				'Shortcut',
+				{
+					'Id': 'ApplicationDesktopShortcut',
+					'Name': self.product_name,
+					'Description': self.comments,
+					'Target': f'[INSTALLDIR]{self.desktop_shortcut}',
+					'WorkingDirectory': 'INSTALLDIR',
+				},
+			)
 			ET.SubElement(comp, 'RemoveFolder', {'Id': 'RemoveDesktopFolder',
 												 'Directory': 'DesktopFolder',
 												 'On': 'uninstall',
@@ -211,14 +233,18 @@ class PackageGenerator:
 				'Id': 'WixUI_FeatureTree',
 			})
 
-		top_feature = ET.SubElement(product, 'Feature', {
-			'Id': 'Complete',
-			'Title': self.name + ' ' + self.version,
-			'Description': 'The complete package',
-			'Display': 'expand',
-			'Level': '1',
-			'ConfigurableDirectory': 'INSTALLDIR',
-		})
+		top_feature = ET.SubElement(
+			product,
+			'Feature',
+			{
+				'Id': 'Complete',
+				'Title': f'{self.name} {self.version}',
+				'Description': 'The complete package',
+				'Display': 'expand',
+				'Level': '1',
+				'ConfigurableDirectory': 'INSTALLDIR',
+			},
+		)
 
 		for f in self.parts:
 			self.scan_feature(top_feature, installdir, 1, f)
@@ -277,7 +303,7 @@ class PackageGenerator:
 	def scan_feature(self, top_feature, installdir, depth, feature):
 		for sd in [feature['staged_dir']]:
 			if '/' in sd or '\\' in sd:
-				sys.exit('Staged_dir %s must not have a path segment.' % sd)
+				sys.exit(f'Staged_dir {sd} must not have a path segment.')
 			nodes = {}
 			for root, dirs, files in os.walk(sd):
 				cur_node = Node(dirs, files)
@@ -354,12 +380,18 @@ class PackageGenerator:
 			sys.exit(1)
 		if platform.system() == "Windows":
 			subprocess.check_call([os.path.join(wixdir, 'candle'), self.main_xml])
-			subprocess.check_call([os.path.join(wixdir, 'light'),
-								   '-ext', 'WixUIExtension',
-								   '-cultures:en-us',
-								   '-dWixUILicenseRtf=' + self.license_file,
-								   '-out', self.final_output,
-								   self.main_o])
+			subprocess.check_call(
+				[
+					os.path.join(wixdir, 'light'),
+					'-ext',
+					'WixUIExtension',
+					'-cultures:en-us',
+					f'-dWixUILicenseRtf={self.license_file}',
+					'-out',
+					self.final_output,
+					self.main_o,
+				]
+			)
 		else:
 			subprocess.check_call([os.path.join(wixdir, 'wixl'), '-o', self.final_output, self.main_xml])
 
@@ -368,7 +400,7 @@ def run(args):
 		sys.exit('createmsi.py <msi definition json>')
 	jsonfile = args[0]
 	if '/' in jsonfile or '\\' in jsonfile:
-		sys.exit('Input file %s must not contain a path segment.' % jsonfile)
+		sys.exit(f'Input file {jsonfile} must not contain a path segment.')
 	p = PackageGenerator(jsonfile)
 	p.generate_files()
 	p.build_package()
